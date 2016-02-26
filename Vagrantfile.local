@@ -1,0 +1,41 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Localized and libvirt specific version
+#
+#
+#######################################################################
+# File: Vagrantfile.local
+# Author: Steven Acres
+# Email: steven@swatteksystems.com
+# Github: https://github.com/sacres
+#######################################################################
+VAGRANTFILE_API_VERSION = "2"
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = "trusty64"
+  config.hostsupdater.remove_on_suspend = false
+  config.vm.define :snipeit do |snipeit|
+      snipeit.vm.network :private_network, ip: "192.168.100.10"
+      snipeit.vm.provision :hosts
+      snipeit.vm.hostname = "snipeit-dev."+ %x(hostname -d).strip
+
+  config.vm.provider :libvirt do |lv|
+    lv.cpus = `nproc`.to_i / 4
+    lv.memory = `grep 'MemTotal' /proc/meminfo | sed -e 's/MemTotal://' -e 's/ kB//'`.to_i / 1024 / 8
+  end
+
+# default router ** clunky work-around until routing on the defined private network is fixed **
+  config.vm.provision "shell",
+  run: "always",
+  inline: "route add default gw 192.168.100.1 dev eth1"
+
+  config.vm.provision :ansible do |ansible|
+    ansible.playbook = "snipeit.yml"
+    ansible.groups = {"snipeit" => ['default']}
+    ansible.extra_vars = {
+      disable_default_apache_site: 'True',
+      run_mysql_on_all_interfaces: 'False'
+     }
+    end
+  end
+end
